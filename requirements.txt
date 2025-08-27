@@ -1,0 +1,7 @@
+
+# Realtime ingestion
+praw
+google-api-python-client
+SQLAlchemy
+python-dotenv
+requests
