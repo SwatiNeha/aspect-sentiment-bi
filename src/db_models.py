@@ -1,43 +1,57 @@
-
-from sqlalchemy import create_engine, Column, Integer, String, Text, Float, DateTime
-from sqlalchemy.orm import declarative_base, sessionmaker
-from sqlalchemy.sql import func
 import os
+from sqlalchemy import create_engine, Column, Integer, String, Text, Float, DateTime, ForeignKey
+from sqlalchemy.orm import declarative_base, sessionmaker, relationship
 from dotenv import load_dotenv
+from datetime import datetime
 
 load_dotenv()
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///data/aspect_reviews.db")
 
-engine = create_engine(DATABASE_URL, future=True)
-SessionLocal = sessionmaker(bind=engine, future=True)
+# Database URL
+DB_URL = os.getenv("DATABASE_URL", "sqlite:///data/aspect_reviews.db")
+
+# SQLAlchemy setup
+engine = create_engine(DB_URL, echo=False, future=True)
+SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
 Base = declarative_base()
+
+# --- Tables ---
 
 class Review(Base):
     __tablename__ = "reviews_raw"
+
     id = Column(Integer, primary_key=True, autoincrement=True)
-    source = Column(String(32))
-    source_id = Column(String(128))
-    product_id = Column(String(64), nullable=True)
-    brand = Column(String(64), nullable=True)
-    author = Column(String(128), nullable=True)
+    source = Column(String(50), nullable=False)
+    source_id = Column(String(100), unique=True, nullable=False)
+    author = Column(String(100))
     text = Column(Text)
-    rating = Column(Float, nullable=True)
-    url = Column(String(512), nullable=True)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    url = Column(String(300))
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    processed = relationship("Processed", back_populates="review", uselist=False)
 
 class Processed(Base):
     __tablename__ = "reviews_processed"
+
     id = Column(Integer, primary_key=True, autoincrement=True)
-    review_id = Column(Integer)
-    sentiment_label = Column(String(8))
+    review_id = Column(Integer, ForeignKey("reviews_raw.id"), nullable=False, unique=True)
+
+    # Phase 2 – Aspects
+    aspects = Column(Text)
+    aspect_csv = Column(Text)
+
+    # Phase 2/3 – Sentiment
+    sentiment_label = Column(String(10))
     score = Column(Float)
     score_signed = Column(Float)
-    aspect_csv = Column(Text)
-    topic_label = Column(String(128), nullable=True)
 
+    # Phase 3 – Topics
+    topic_id = Column(Integer)
+    topic_label = Column(String(200))
+
+    processed_at = Column(DateTime, default=datetime.utcnow)
+
+    review = relationship("Review", back_populates="processed")
+
+# --- Helper ---
 def init_db():
-    Base.metadata.create_all(engine)
-
-if __name__ == "__main__":
-    init_db()
-    print("DB initialized at", DATABASE_URL)
+    Base.metadata.create_all(bind=engine)
