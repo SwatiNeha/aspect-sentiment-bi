@@ -80,6 +80,7 @@ REDDIT_KEYWORDS=battery,camera,screen,shipping,quality
 ### Ingest + Process Reddit data
 ```bash
 python realtime/ingest_reddit_stream.py
+python realtime/process_new_phase3.py
 ```
 
 ### Export to CSV for Power BI
