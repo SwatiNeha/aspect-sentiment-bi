@@ -1,6 +1,6 @@
 # realtime/hybrid_ingest_and_process.py
-# Backfill the last N comments ACROSS ALL selected subreddits (not per sub),
-# then stream new comments and run processing every M saved rows.
+# Backfill the last N comments across all subreddits, then stream new comments
+# for a limited time (default 3 minutes), processing every M new saved rows.
 
 import os, re, sys, time, logging
 from typing import List, Optional
@@ -49,10 +49,11 @@ MATCH_MODE = os.getenv("REDDIT_MATCH_MODE", "AND").upper()
 if MATCH_MODE not in {"AND", "OR"}:
     MATCH_MODE = "AND"
 
-# <<< your requested knobs >>>
-BACKFILL_TOTAL = int(os.getenv("REDDIT_BACKFILL_TOTAL", "20"))   # overall, across all subs
-REALTIME_BATCH = int(os.getenv("REDDIT_REALTIME_BATCH", "5"))    # process after this many new
-OVERSAMPLE = int(os.getenv("REDDIT_BACKFILL_OVERSAMPLE", "10"))  # fetch more to survive filtering
+# knobs
+BACKFILL_TOTAL = int(os.getenv("REDDIT_BACKFILL_TOTAL", "20"))      # overall, across all subs
+REALTIME_BATCH = int(os.getenv("REDDIT_REALTIME_BATCH", "5"))       # process after this many
+OVERSAMPLE = int(os.getenv("REDDIT_BACKFILL_OVERSAMPLE", "10"))     # fetch more to survive filtering
+STREAM_SECONDS = int(os.getenv("REDDIT_STREAM_SECONDS", "180"))     # default 3 minutes
 
 def _compile_or(words: List[str]) -> Optional[re.Pattern]:
     if not words:
@@ -76,19 +77,14 @@ def create_reddit() -> praw.Reddit:
 
 # ---------- DB insert helper ----------
 def save_comment(session: SessionLocal, comment, body: str, title: str) -> bool:
-    # author string
     author = str(comment.author) if comment.author else "[deleted]"
     a = author.lower()
 
-    # skip obvious bots (AutoModerator, Nightbot, etc.)
     if a.endswith("bot") or a in {"automoderator", "bot"}:
         return False
-
-    # skip empty text
     if not body or not body.strip():
         return False
 
-    # de-dup on (source, source_id)
     exists = session.query(Review.id).filter_by(source="reddit", source_id=comment.id).first()
     if exists:
         return False
@@ -106,7 +102,7 @@ def save_comment(session: SessionLocal, comment, body: str, title: str) -> bool:
     log.info("Saved %s | u/%s | %s", comment.id, author, url)
     return True
 
-# ---------- Backfill (overall N, not per sub) ----------
+# ---------- Backfill ----------
 def backfill_recent_total(reddit, session):
     if BACKFILL_TOTAL <= 0:
         return 0
@@ -114,7 +110,6 @@ def backfill_recent_total(reddit, session):
     log.info("Backfilling last %d comments overall from: %s", BACKFILL_TOTAL, sr)
 
     saved = 0
-    # oversample to account for filters; break once we save BACKFILL_TOTAL
     raw_limit = max(BACKFILL_TOTAL * OVERSAMPLE, BACKFILL_TOTAL)
     for c in reddit.subreddit(sr).comments(limit=raw_limit):
         body = c.body or ""
@@ -128,19 +123,24 @@ def backfill_recent_total(reddit, session):
             saved += 1
             if saved >= BACKFILL_TOTAL:
                 break
-        time.sleep(0.02)  # light throttle
+        time.sleep(0.02)
     log.info("Backfill saved %d comments.", saved)
     return saved
 
-# ---------- Stream ----------
-def stream_and_process(reddit, session):
+# ---------- Stream with timer ----------
+def stream_and_process(reddit, session, max_seconds: int = STREAM_SECONDS):
     sr = "+".join(SUBREDDITS) if SUBREDDITS else "all"
     log.info("Streaming from: %s | match=%s | keywords=%s | products=%s",
              sr, MATCH_MODE, KEYWORDS, PRODUCT_TERMS)
 
     saved_since_last_process = 0
+    start = time.time()
+
     stream = reddit.subreddit(sr).stream.comments(skip_existing=True)
     for comment in stream:
+        if time.time() - start > max_seconds:
+            log.info("Reached %d seconds, stopping stream.", max_seconds)
+            break
         try:
             body = comment.body or ""
             try:
@@ -172,8 +172,8 @@ def main():
     reddit = create_reddit()
     session = SessionLocal()
     try:
-        backfill_recent_total(reddit, session)   # overall N (default 20)
-        stream_and_process(reddit, session)      # process every M new (default 5)
+        backfill_recent_total(reddit, session)
+        stream_and_process(reddit, session)
     except KeyboardInterrupt:
         log.info("Shutting down (Ctrl+C).")
     finally:

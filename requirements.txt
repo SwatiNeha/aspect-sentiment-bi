@@ -5,3 +5,10 @@ google-api-python-client
 SQLAlchemy
 python-dotenv
 requests
+transformers
+torch
+scikit-learn
+bertopic
+umap-learn
+keybert
+spacy[en_core_web_sm]
