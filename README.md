@@ -38,7 +38,7 @@ aspect-sentiment-bi/
 │
 ├── requirements.txt        # Python dependencies
 ├── sample_reviews.csv      # Example dataset
-└── README.md               # You are here 🚀
+└── README.md               
 ```
 
 ---
