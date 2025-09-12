@@ -4,22 +4,34 @@ A **real-time Reddit ingestion + NLP pipeline** that extracts **aspects, sentime
 
 ---
 
-## 🚀 Features
-- 🔄 **Hybrid ingestion**: Backfills recent Reddit comments + streams live ones.
-- 📝 **Aspect extraction**: KeyBERT + spaCy noun-chunking.
-- 😃 **Sentiment analysis**: `cardiffnlp/twitter-roberta-base-sentiment-latest`.
-- 🧩 **Topic modeling**: BERTopic with cleanup for meaningful clusters.
-- 🗄️ **SQLite persistence**: Two tables:
+## Features
+- **Hybrid ingestion**: Backfills recent Reddit comments + streams live ones.
+- **Aspect extraction**: KeyBERT + spaCy noun-chunking.
+- **Sentiment analysis**: `cardiffnlp/twitter-roberta-base-sentiment-latest`.
+- **Topic modeling**: BERTopic with cleanup for meaningful clusters.
+- **SQLite persistence**: Two tables:
   - `reviews_raw`: ingested comments.
   - `reviews_processed`: aspects, sentiment, topics.
-- 📈 **Power BI dashboard**:
+- **Power BI dashboard**:
   - Daily review trends.
   - Aspect-level sentiment distribution.
   - Drill-down explorer of raw reviews.
 
 ---
 
-## 📂 Project Structure
+## Real-World Applications
+
+This project isn’t just an NLP pipeline - it mirrors how companies listen to customers in real time to make better business decisions.
+
+For product teams, the pipeline turns messy Reddit chatter into structured insights: which features (battery, camera, screen, shipping, quality) customers talk about most, and whether the sentiment is positive, neutral, or negative. This helps teams prioritize feature fixes or improvements backed by real user voices.
+
+For marketing and strategy, aspect-level sentiment reveals not just what people are saying, but how they feel about it. A sudden spike in negative sentiment around “shipping” could signal logistics problems, while sustained positivity around “camera” can be leveraged in campaigns.
+
+In customer experience and support, the system can highlight recurring complaints in near real time, allowing quick interventions before issues escalate.
+
+Finally, from a BI and data infrastructure standpoint, this project demonstrates how social media streams can be transformed into interactive dashboards in Power BI - blending real-time NLP with business intelligence. The same architecture could be extended beyond Reddit to Twitter, YouTube, or product reviews, making it a general-purpose voice-of-customer analytics platform.
+
+## Project Structure
 ```
 aspect-sentiment-bi/
 │
@@ -43,7 +55,7 @@ aspect-sentiment-bi/
 
 ---
 
-## ⚙️ Setup
+## Setup
 
 ### 1. Clone repo
 ```bash
@@ -75,7 +87,7 @@ REDDIT_KEYWORDS=battery,camera,screen,shipping,quality
 
 ---
 
-## ▶️ Usage
+## Usage
 
 ### Ingest + Process Reddit data
 ```bash
@@ -113,7 +125,7 @@ pause
 
 ---
 
-## 📊 Power BI Dashboard
+## Power BI Dashboard
 - Daily reviews & sentiment trend.
 - Aspect-level sentiment view.
 - Top discussion topics.
@@ -132,21 +144,21 @@ python -m src.db_models
 
 ---
 
-## 📌 Roadmap
+## Roadmap
 - [ ] Add Docker setup.
 - [ ] Deploy Power BI as shared workspace.
 - [ ] Expand to other sources (Twitter, YouTube).
 
 ---
 
-## 🤝 Contributing
+## Contributing
 1. Fork the repo
 2. Create a branch: `git checkout -b feature/your-feature`
 3. Commit: `git commit -m "Add your feature"`
 4. Push: `git push origin feature/your-feature`
-5. Open a Pull Request 🚀
+5. Open a Pull Request 
 
 ---
 
-## 📜 License
+## License
 MIT License © 2025 [SwatiNeha](https://github.com/SwatiNeha)
