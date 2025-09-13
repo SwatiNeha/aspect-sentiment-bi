@@ -13,7 +13,7 @@ with DAG(
     "aspect_sentiment_pipeline",
     default_args=default_args,
     description="Ingest Reddit → Process → Export for Power BI",
-    schedule_interval="@daily",  # run once daily (change to @hourly / cron as needed)
+    schedule_interval="@hourly",  # run once daily (change to @hourly / cron as needed)
     start_date=datetime(2025, 9, 12),
     catchup=False,
     tags=["aspect-sentiment", "portfolio"],
