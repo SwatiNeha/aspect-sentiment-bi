@@ -11,6 +11,8 @@ from sklearn.feature_extraction.text import CountVectorizer
 from hdbscan import HDBSCAN
 from dotenv import load_dotenv
 
+sys.path.append("/opt/airflow/src")
+
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 print("process_new_phase3.py STARTED")
@@ -52,7 +54,7 @@ def analyze_sentiment(txt: str):
     return label, score, score * sign
 
 # --- Load or train BERTopic ---
-MODEL_PATH = "models/bertopic_model"
+MODEL_PATH = "/opt/airflow/models/bertopic_model"
 os.makedirs(os.path.dirname(MODEL_PATH), exist_ok=True)
 
 vectorizer = CountVectorizer(
@@ -94,9 +96,28 @@ else:
 
 # --- Junk words to filter out ---
 JUNK_WORDS = {
-    "the", "not", "and", "but", "you", "your", "this",
-    "pro", "for", "new", "one", "get", "just", "like",
-    "iphone", "phone", "message", "read"
+    # basic stopwords
+    "the","a","an","is","are","was","were","be","been","do","did","does",
+    "at","in","on","with","to","from","of","by","about","into","over","under",
+    "so","very","much","many","few","more","most","some","any","all","every",
+    "can","could","should","would","will","may","might","must",
+
+    # casual / reddit filler
+    "lol","haha","omg","damn","bro","dude","hey","hi","hello",
+    "pls","please","thanks","thank","thx","yep","yeah","nope","ok","okay",
+    "idk","imo","imho","btw","wtf","smh","lmao","rofl",
+
+    # tech filler
+    "app","apps","update","version","feature","features","option","options",
+    "thing","stuff","item","items","product","products","device","devices",
+    "model","models","series","line","brand","brands",
+
+    # short tokens
+    "nah","yup","wow","ugh","meh","ayy","ehh",
+
+    # from your list
+    "not","and","but","you","your","this","pro","for","new","one","get",
+    "just","like","iphone","phone","message","read"
 }
 
 def get_clean_topic_label(topic_id):

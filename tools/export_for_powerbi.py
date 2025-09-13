@@ -8,7 +8,7 @@ load_dotenv()
 DB_URL = os.getenv("DATABASE_URL", "sqlite:///data/aspect_reviews.db")
 DB_PATH = DB_URL.replace("sqlite:///", "", 1)
 
-OUT_DIR = "data/processed"
+OUT_DIR = "/opt/airflow/data/processed"
 os.makedirs(OUT_DIR, exist_ok=True)
 
 def main():

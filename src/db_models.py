@@ -47,6 +47,8 @@ class Processed(Base):
     # Phase 3 – Topics
     topic_id = Column(Integer)
     topic_label = Column(String(200))
+    topic_prob = Column(Float)         # NEW: probability score for topic
+    topic_source = Column(String(50))  # NEW: where topic came from ("bertopic")
 
     processed_at = Column(DateTime, default=datetime.utcnow)
 
