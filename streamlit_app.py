@@ -188,12 +188,23 @@ else:
 
 # --- Latest Feedback Table ---
 st.subheader("📝 Latest Feedback")
+
+# Rename & select only required columns
 df_display = df_reviews.rename(columns={
     "author": "User",
     "text": "Feedback",
-    "created_at": "Date"
-})
+    "created_at": "Date",
+    "source": "Source" 
+})[["User", "Feedback", "Date", "Source"]]
+
+# Sort latest 10
+latest_feedback = df_display.sort_values("Date", ascending=False).head(10).reset_index(drop=True)
+
+# Add Serial Number column (1–10)
+latest_feedback.index = latest_feedback.index + 1
+latest_feedback.index.name = "S.No."
+
 if not df_filtered.empty:
-    st.dataframe(df_display.sort_values("Date", ascending=False).head(10))
+    st.dataframe(latest_feedback)
 else:
     st.info("No feedback available for selected filters.")
