@@ -11,7 +11,7 @@ from streamlit_autorefresh import st_autorefresh
 st_autorefresh(interval=60 * 1000, limit=None, key="refresh")  # refresh every 60 sec
 
 # --- DB Connection ---
-@st.cache_data
+@st.cache_data(ttl=60)
 def load_data():
     conn = sqlite3.connect("data/aspect_reviews.db")
     df_reviews = pd.read_sql("SELECT * FROM reviews_raw", conn)
