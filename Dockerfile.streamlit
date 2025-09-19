@@ -1,20 +1,24 @@
 FROM python:3.10-slim
 
-# Set workdir
 WORKDIR /app
 
-# Install system deps if needed (for wordcloud, matplotlib, etc.)
+# System deps for Streamlit, matplotlib, wordcloud, spaCy
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     libgl1 \
+    libglib2.0-0 \
+    libsm6 \
+    libxrender1 \
+    libxext6 \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements first for caching
+# Copy requirements
 COPY requirements.txt .
 
+# Install Python deps
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy the Streamlit app
+# Copy app
 COPY . .
 
 EXPOSE 8501
