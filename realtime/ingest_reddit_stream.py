@@ -1,0 +1,208 @@
+# realtime/ingest_reddit_stream.py
+# Stream comments until a fixed number (default 50), processing every M new saved rows.
+# Uses Reddit's own buffer instead of explicit backfill.
+
+import os, re, sys, time, logging
+from typing import List, Optional
+from datetime import datetime
+
+sys.path.append("/opt/airflow/src")
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))  # local dev
+
+from dotenv import load_dotenv
+import praw
+from src.db_models import SessionLocal, Review, init_db
+
+
+# ---------- logging ----------
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s | %(levelname)s | %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
+log = logging.getLogger("reddit-ingestor")
+
+# ---------- env ----------
+load_dotenv()
+CLIENT_ID = os.getenv("REDDIT_CLIENT_ID")
+CLIENT_SECRET = os.getenv("REDDIT_CLIENT_SECRET")
+UA = os.getenv("REDDIT_USER_AGENT", "aspect-sentiment-bi/0.1")
+
+SUBREDDITS = [
+    s.strip() for s in os.getenv("REDDIT_SUBREDDITS", "iphone,android,samsung,oneplus,pixel,xiaomi,oppo,vivo,realme,"
+        "laptops,macbook,surface,dell,lenovo,asus,hp,acer,msi,"
+        "apple,technology,gadgets,techsupport,smartphones,pcgaming").split(",") if s.strip()
+]
+
+def _tokens(env_key: str, default_csv: str, min_len: int = 3) -> List[str]:
+    vals = [w.strip() for w in os.getenv(env_key, default_csv).split(",")]
+    return [w for w in vals if len(w) >= min_len]
+
+# expanded keywords
+KEYWORDS = _tokens(
+    "REDDIT_KEYWORDS",
+    "battery,batteries,charging,charger,power,fast charge,slow charge,"
+    "camera,cameras,lens,photo,photos,video,videos,low light,night mode,"
+    "screen,screens,display,brightness,resolution,refresh rate,lag,laggy,pixel,pixels,"
+    "performance,speed,slow,sluggish,freeze,freezing,hang,crash,crashes,bug,bugs,smooth,"
+    "heating,overheating,hot,temperature,fan noise,"
+    "durability,durable,build,design,lightweight,thin,heavy,sturdy,scratch,scratches,broken,"
+    "price,cost,expensive,cheap,value,worth,affordable,"
+    "quality,warranty,repair,service,support,update,updates,patch,"
+    "sound,audio,mic,microphone,speaker,speakers,bass,volume,voice,"
+    "connectivity,wifi,bluetooth,5g,signal,reception,network,coverage,"
+    "storage,memory,ram,sd card,expandable,disk,drive,"
+    "gaming,gamer,fps,graphics,frame rate,gpu,cpu,performance mode,"
+    "packaging,shipping,delivery,return,replacement"
+)
+
+# expanded gadget/product terms
+PRODUCT_TERMS = _tokens(
+    "PRODUCT_TERMS",
+    "iphone,ios,ipad,macbook,airpods,apple watch,apple,ip,ip15,ip14,"
+    "android,pixel,galaxy,samsung,oneplus,1+,xiaomi,oppo,vivo,realme,honor,"
+    "headphones,earbuds,airbuds,bluetooth,beats,bose,sony,"
+    "smart tv,television,tv,oled,qled,"
+    "laptop,ultrabook,chromebook,surface,lenovo,thinkpad,dell,hp,asus,acer,msi,"
+    "nintendo,switch,playstation,ps4,ps5,xbox,console,gaming pc,pc,"
+    "camera,canon,nikon,sony alpha,gopro,dslr,mirrorless,"
+    "tablet,kindle,e-reader,"
+    "drone,dji,smartwatch,fitbit,garmin,wearable,watch,"
+    "router,wifi,mesh,modem,smart speaker,echo,google home,alexa,homepod"
+)
+
+# Match mode (keep OR)
+MATCH_MODE = os.getenv("REDDIT_MATCH_MODE", "OR").upper()
+if MATCH_MODE not in {"AND", "OR"}:
+    MATCH_MODE = "OR"
+
+# knobs
+REALTIME_BATCH = int(os.getenv("REDDIT_REALTIME_BATCH", "5"))      # process after this many
+STREAM_COMMENTS = int(os.getenv("REDDIT_STREAM_COMMENTS", "100"))  # stop after N comments
+
+def _compile_or(words: List[str]) -> Optional[re.Pattern]:
+    if not words:
+        return None
+    return re.compile(r"\b(" + "|".join(map(re.escape, words)) + r")\b", re.I)
+
+KW_RE   = _compile_or(KEYWORDS)
+PROD_RE = _compile_or(PRODUCT_TERMS)
+
+def should_keep(text: str, submission_title: str = "") -> bool:
+    blob = f"{submission_title}\n{text or ''}"
+    kw_hit = (KW_RE.search(blob) is not None) if KW_RE else True
+    prod_hit = (PROD_RE.search(blob) is not None) if PROD_RE else True
+    keep = (kw_hit and prod_hit) if MATCH_MODE == "AND" else (kw_hit or prod_hit)
+    log.info("Filter check | kw_hit=%s | prod_hit=%s | keep=%s | text=%s",
+             kw_hit, prod_hit, keep, text[:200])
+    return keep
+
+
+def create_reddit() -> praw.Reddit:
+    if not CLIENT_ID or not CLIENT_SECRET or not UA:
+        log.error("Missing Reddit credentials. Check .env")
+        sys.exit(1)
+    return praw.Reddit(client_id=CLIENT_ID, client_secret=CLIENT_SECRET, user_agent=UA)
+
+# ---------- DB insert helper ----------
+def save_comment(session: SessionLocal, comment, body: str, title: str) -> bool:
+    author = str(comment.author) if comment.author else "[deleted]"
+    a = author.lower()
+
+    if a.endswith("bot") or a in {"automoderator", "bot"}:
+        return False
+    if not body or not body.strip():
+        return False
+
+    exists = session.query(Review.id).filter_by(source="reddit", source_id=comment.id).first()
+    if exists:
+        log.info("Duplicate found → skipping comment %s", comment.id)
+        return False
+
+    url = f"https://www.reddit.com{comment.permalink}"
+    rec = Review(
+        source="reddit",
+        source_id=comment.id,
+        author=author,
+        text=body,
+        url=url,
+    )
+    session.add(rec)
+    session.commit()
+    log.info("Saved %s | u/%s | %s", comment.id, author, url)
+    return True
+
+# Stream until N comments
+def stream_and_process(reddit, session, max_comments: int = STREAM_COMMENTS):
+    sr = "+".join(SUBREDDITS) if SUBREDDITS else "all"
+    
+    saved_since_last_process = 0
+    total_saved = 0
+    started_realtime = False
+
+    # Backfill
+    # Grab recent N comments from chosen subreddits
+    for comment in reddit.subreddit(sr).comments(limit=1000):  # adjust limit
+        if total_saved >= max_comments:
+            break
+        body = comment.body or ""
+        try:
+            title = comment.submission.title or ""
+        except Exception:
+            title = ""
+        if not should_keep(body, title):
+            continue
+        if save_comment(session, comment, body, title):
+            saved_since_last_process += 1
+            total_saved += 1
+            log.info("Saved comment #%d (total so far)", total_saved)
+        
+        else:
+            log.info("Hit duplicate at %s.", comment.id)
+            
+
+    # STREAM LIVE- polling
+    stream = reddit.subreddit(sr).stream.comments(skip_existing=True)  
+    for comment in stream:
+        if total_saved >= max_comments:
+            log.info("Reached %d comments, stopping stream.", max_comments)
+            break
+        try:
+            if not started_realtime:
+                    log.info("Now saving from realtime stream...")
+                    started_realtime = True
+
+            body = comment.body or ""
+            try:
+                title = comment.submission.title or ""
+            except Exception:
+                title = ""
+            if not should_keep(body, title):
+                continue
+            if save_comment(session, comment, body, title):
+                saved_since_last_process += 1
+                total_saved += 1
+                log.info("Saved comment #%d (total so far)", total_saved)
+
+           
+        except KeyboardInterrupt:
+            raise
+        except Exception as e:
+            log.warning("Error handling comment: %s", e)
+            session.rollback()
+            time.sleep(1)
+
+def main():
+    init_db()
+    reddit = create_reddit()
+    session = SessionLocal()
+    try:
+        stream_and_process(reddit, session)
+    except KeyboardInterrupt:
+        log.info("Shutting down (Ctrl+C).")
+    finally:
+        session.close()
+        log.info("DB session closed.")
+
+if __name__ == "__main__":
+    main()

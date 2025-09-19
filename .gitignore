@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+subprojects/
+models/
+
+# Env & local secrets
+.env
+.env.*
+
+# Data
+data/processed/**
+!data/processed/.keep
+
+# VS Code / OS
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Notebooks
+.ipynb_checkpoints/
+
+logs/

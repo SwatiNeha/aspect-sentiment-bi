@@ -1,0 +1,27 @@
+# Core ingestion + APIs
+praw
+google-api-python-client
+SQLAlchemy
+python-dotenv
+requests
+
+# NLP + Transformers
+transformers>=4.42
+torch>=2.7
+
+# ML + Topic Modeling
+scikit-learn>=1.5
+umap-learn>=0.5.6
+bertopic>=0.17.0
+keybert>=0.8.0
+
+# SpaCy (compatible with en-core-web-sm 3.7.1)
+spacy>=3.7.2,<3.8.0
+en-core-web-sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.7.1/en_core_web_sm-3.7.1-py3-none-any.whl
+
+# Streamlit + Visualization
+streamlit
+wordcloud
+matplotlib
+pandas
+streamlit-autorefresh
