@@ -5,9 +5,9 @@ SQLAlchemy
 python-dotenv
 requests
 
-# NLP + Transformers
+# NLP + Transformers (CPU only)
 transformers>=4.42
-torch>=2.7
+torch==2.2.0+cpu -f https://download.pytorch.org/whl/torch_stable.html
 
 # ML + Topic Modeling
 scikit-learn>=1.5
@@ -15,13 +15,15 @@ umap-learn>=0.5.6
 bertopic>=0.17.0
 keybert>=0.8.0
 
-# SpaCy (compatible with en-core-web-sm 3.7.1)
+# SpaCy (runtime install model, not build-time)
 spacy>=3.7.2,<3.8.0
-en-core-web-sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.7.1/en_core_web_sm-3.7.1-py3-none-any.whl
 
 # Streamlit + Visualization
-streamlit
+streamlit==1.32.2
 wordcloud
 matplotlib
 pandas
 streamlit-autorefresh
+pyarrow>=14.0.1
+altair>=5.0
+watchdog>=4.0
