@@ -2,7 +2,7 @@
 
 A **real-time Reddit ingestion + NLP pipeline** that extracts **aspects, sentiment, and topics** from product discussions, and powers an **interactive dashboard**.
 
-🚀 **[Live Streamlit Demo](https://aspectsentimentbi.streamlit.app/)**  
+ 
 
 ---
 
