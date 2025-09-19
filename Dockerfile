@@ -1,5 +1,4 @@
-FROM apache/airflow:2.9.0
-
+FROM apache/airflow:2.9.0-python3.10
 # Install system dependencies (needed for spacy, torch, etc.)
 USER root
 RUN apt-get update && apt-get install -y --no-install-recommends \
