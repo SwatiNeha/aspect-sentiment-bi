@@ -7,6 +7,8 @@ import matplotlib.pyplot as plt
 import plotly.graph_objects as go
 from streamlit_autorefresh import st_autorefresh
 
+st.set_page_config(page_title="Feedback Dashboard", layout="wide")
+
 # --- Auto Refresh ---
 st_autorefresh(interval=60 * 1000, limit=None, key="refresh")  # refresh every 60 sec
 
@@ -109,8 +111,6 @@ else:  # Total → cumulative trend
     )
     trend_data = daily.rename(columns={"date": "datetime"})
 
-# --- Dashboard Title ---
-st.set_page_config(page_title="Feedback Dashboard", layout="wide")
 st.title("📊 Feedback Dashboard")
 
 # --- KPI Values ---
