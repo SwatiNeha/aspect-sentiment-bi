@@ -192,15 +192,16 @@ st.subheader("📌 Sentiment vs Topics")
 
 if not last_period.empty and "topic_label" in last_period.columns:
     topic_sentiment = (
-        last_period.groupby("topic_label")
-        .agg(
-            Avg_Sentiment=("score_signed", "mean"),
-            Mentions=("review_id", "count")
-        )
-        .reset_index()
-        .sort_values("Mentions", ascending=False)
-        .head(15)  # show top 15 topics
+    last_period.groupby("topic_label")
+    .agg(
+        Avg_Sentiment=pd.NamedAgg(column="score_signed", aggfunc="mean"),
+        Mentions=pd.NamedAgg(column="review_id", aggfunc="count")
     )
+    .reset_index()
+    .sort_values("Mentions", ascending=False)
+    .head(15)
+)
+
 
     if not topic_sentiment.empty:
         fig_topic = go.Figure()
