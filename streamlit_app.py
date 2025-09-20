@@ -7,8 +7,6 @@ import matplotlib.pyplot as plt
 import plotly.graph_objects as go
 from streamlit_autorefresh import st_autorefresh
 
-st.set_page_config(page_title="Feedback Dashboard", layout="wide")
-
 # --- Auto Refresh ---
 st_autorefresh(interval=60 * 1000, limit=None, key="refresh")  # refresh every 60 sec
 
@@ -111,6 +109,8 @@ else:  # Total → cumulative trend
     )
     trend_data = daily.rename(columns={"date": "datetime"})
 
+# --- Dashboard Title ---
+st.set_page_config(page_title="Feedback Dashboard", layout="wide")
 st.title("📊 Feedback Dashboard")
 
 # --- KPI Values ---
@@ -192,16 +192,15 @@ st.subheader("📌 Sentiment vs Topics")
 
 if not last_period.empty and "topic_label" in last_period.columns:
     topic_sentiment = (
-    last_period.groupby("topic_label")
-    .agg(
-        Avg_Sentiment=pd.NamedAgg(column="score_signed", aggfunc="mean"),
-        Mentions=pd.NamedAgg(column="review_id", aggfunc="count")
+        last_period.groupby("topic_label")
+        .agg(
+            Avg_Sentiment=("score_signed", "mean"),
+            Mentions=("review_id", "count")
+        )
+        .reset_index()
+        .sort_values("Mentions", ascending=False)
+        .head(15)  # show top 15 topics
     )
-    .reset_index()
-    .sort_values("Mentions", ascending=False)
-    .head(15)
-)
-
 
     if not topic_sentiment.empty:
         fig_topic = go.Figure()
