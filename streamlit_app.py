@@ -189,61 +189,7 @@ else:
     st.info("No aspects available for selected filters.")
 
 
-# --- Sentiment vs Topics ---
-st.subheader("📌 Sentiment vs Topics")
-
-if not last_period.empty and "topic_label" in last_period.columns:
-    topic_sentiment = (
-        last_period.groupby("topic_label")
-        .agg(
-            Avg_Sentiment=("score_signed", "mean"),
-            Mentions=("review_id", "count")
-        )
-        .reset_index()
-        .sort_values("Mentions", ascending=False)
-        .head(15)  # show top 15 topics
-    )
-
-    if not topic_sentiment.empty:
-        fig_topic = go.Figure()
-
-        # Bar chart for Avg Sentiment
-        fig_topic.add_trace(go.Bar(
-            x=topic_sentiment["Avg_Sentiment"],
-            y=topic_sentiment["topic_label"],
-            orientation="h",
-            marker=dict(
-                color=[
-                    "#90EE90" if s > 0.05 else "#FFB6B6" if s < -0.05 else "#ADD8E6"
-                    for s in topic_sentiment["Avg_Sentiment"]
-                ]
-            ),
-            name="Avg Sentiment"
-        ))
-
-        # Add mentions as text labels
-        for idx, row in topic_sentiment.iterrows():
-            fig_topic.add_annotation(
-                x=row["Avg_Sentiment"],
-                y=row["topic_label"],
-                text=f"{row['Mentions']} mentions",
-                showarrow=False,
-                xanchor="left" if row["Avg_Sentiment"] >= 0 else "right"
-            )
-
-        fig_topic.update_layout(
-            title=f"Average Sentiment by Topic (Top 15) — {time_group}",
-            xaxis_title="Average Sentiment Score (-1 = Negative, +1 = Positive, 0 = Neutral)",
-            yaxis_title="Topic",
-            height=600
-        )
-
-        st.plotly_chart(fig_topic, use_container_width=True)
-    else:
-        st.info("No topics found for the selected filters.")
-else:
-    st.info("Topic data not available.")
-    
+  
 
 # --- Latest Feedback Table ---
 st.subheader("📝 Latest Feedback")
