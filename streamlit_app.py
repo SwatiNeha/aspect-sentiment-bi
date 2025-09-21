@@ -77,60 +77,64 @@ if sentiments_selected:
 
 # --- Aggregate Data by Time ---
 if time_group == "Hourly":
-    trend_data = df_filtered.groupby(pd.Grouper(key="datetime", freq="H")).agg(
+    df_filtered["hour"] = df_filtered["datetime"].dt.floor("H")
+    trend_data = df_filtered.groupby("hour").agg(
         Average_Sentiment=("score_signed", "mean"),
         Review_Count=("review_id", "count")
     ).reset_index()
+    latest_time = trend_data.iloc[-1]["hour"] if not trend_data.empty else None
+    last_period = df_filtered[df_filtered["hour"] == latest_time] if latest_time is not None else pd.DataFrame()
 
 elif time_group == "Daily":
     trend_data = df_filtered.groupby("date").agg(
         Average_Sentiment=("score_signed", "mean"),
         Review_Count=("review_id", "count")
     ).reset_index()
+    latest_time = trend_data.iloc[-1]["date"] if not trend_data.empty else None
+    last_period = df_filtered[df_filtered["date"] == latest_time] if latest_time is not None else pd.DataFrame()
 
 elif time_group == "Weekly":
-    trend_data = df_filtered.groupby(pd.Grouper(key="datetime", freq="W")).agg(
+    # Floor to Monday of each week
+    df_filtered["week_start"] = df_filtered["datetime"].dt.to_period("W-MON").dt.start_time
+
+    # Aggregate by week_start
+    trend_data = df_filtered.groupby("week_start").agg(
         Average_Sentiment=("score_signed", "mean"),
         Review_Count=("review_id", "count")
     ).reset_index()
 
+    non_empty = trend_data[trend_data["Review_Count"] > 0]
+    latest_time = non_empty.iloc[-1]["week_start"] if not non_empty.empty else None
+    last_period = df_filtered[df_filtered["week_start"] == latest_time] if latest_time is not None else pd.DataFrame()
+
 elif time_group == "Monthly":
-    trend_data = df_filtered.groupby(pd.Grouper(key="datetime", freq="M")).agg(
+    df_filtered["month_start"] = df_filtered["datetime"].dt.to_period("M").dt.start_time
+
+    trend_data = df_filtered.groupby("month_start").agg(
         Average_Sentiment=("score_signed", "mean"),
         Review_Count=("review_id", "count")
     ).reset_index()
+
+    non_empty = trend_data[trend_data["Review_Count"] > 0]
+    latest_time = non_empty.iloc[-1]["month_start"] if not non_empty.empty else None
+    last_period = df_filtered[df_filtered["month_start"] == latest_time] if latest_time is not None else pd.DataFrame()
 
 else:  # Total → cumulative trend
     daily = df_filtered.groupby("date").agg(
         Daily_Sentiment=("score_signed", "mean"),
         Daily_Count=("review_id", "count")
     ).reset_index()
-
     daily["Cumulative_Count"] = daily["Daily_Count"].cumsum()
     daily["Cumulative_Sentiment"] = (
         (daily["Daily_Sentiment"] * daily["Daily_Count"]).cumsum()
         / daily["Cumulative_Count"]
     )
     trend_data = daily.rename(columns={"date": "datetime"})
+    last_period = df_filtered  # total = all data
 
 
 
 # --- KPI Values ---
-if time_group == "Total":
-    last_period = df_filtered
-else:
-    last_period = pd.DataFrame()
-    if not trend_data.empty:
-        latest_time = trend_data.iloc[-1][0]
-        if time_group == "Hourly":
-            last_period = df_filtered[df_filtered["datetime"].dt.floor("H") == latest_time]
-        elif time_group == "Daily":
-            last_period = df_filtered[df_filtered["date"] == latest_time]
-        elif time_group == "Weekly":
-            last_period = df_filtered[df_filtered["datetime"].dt.to_period("W").dt.start_time == latest_time]
-        elif time_group == "Monthly":
-            last_period = df_filtered[df_filtered["datetime"].dt.to_period("M").dt.start_time == latest_time]
-
 n_pos = (last_period["sentiment_label"] == "POSITIVE").sum() if not last_period.empty else 0
 n_neg = (last_period["sentiment_label"] == "NEGATIVE").sum() if not last_period.empty else 0
 n_neu = (last_period["sentiment_label"] == "NEUTRAL").sum() if not last_period.empty else 0
@@ -171,7 +175,7 @@ if not trend_data.empty:
     if time_group == "Total":
         st.line_chart(trend_data.set_index("datetime")[["Cumulative_Sentiment", "Cumulative_Count"]])
     else:
-        index_col = "datetime" if time_group in ["Hourly", "Weekly", "Monthly"] else "date"
+        index_col = trend_data.columns[0]  # dynamic: hour/date/year_week/year_month
         st.line_chart(trend_data.set_index(index_col)[["Average_Sentiment", "Review_Count"]])
 else:
     st.info("No data available for selected filters.")
@@ -188,30 +192,65 @@ if not df_filtered.empty:
 else:
     st.info("No aspects available for selected filters.")
 
-
-  
+# --- Sentiment vs Topics ---
+st.subheader("📌 Sentiment vs Topics")
+if not last_period.empty and "topic_label" in last_period.columns:
+    topic_sentiment = (
+        last_period.groupby("topic_label")
+        .agg(
+            Avg_Sentiment=("score_signed", "mean"),
+            Mentions=("review_id", "count")
+        )
+        .reset_index()
+        .sort_values("Mentions", ascending=False)
+        .head(15)
+    )
+    if not topic_sentiment.empty:
+        fig_topic = go.Figure()
+        fig_topic.add_trace(go.Bar(
+            x=topic_sentiment["Avg_Sentiment"],
+            y=topic_sentiment["topic_label"],
+            orientation="h",
+            marker=dict(
+                color=[
+                    "#90EE90" if s > 0.05 else "#FFB6B6" if s < -0.05 else "#ADD8E6"
+                    for s in topic_sentiment["Avg_Sentiment"]
+                ]
+            ),
+            name="Avg Sentiment"
+        ))
+        for idx, row in topic_sentiment.iterrows():
+            fig_topic.add_annotation(
+                x=row["Avg_Sentiment"],
+                y=row["topic_label"],
+                text=f"{row['Mentions']} mentions",
+                showarrow=False,
+                xanchor="left" if row["Avg_Sentiment"] >= 0 else "right"
+            )
+        fig_topic.update_layout(
+            title=f"Average Sentiment by Topic (Top 15) — {time_group}",
+            xaxis_title="Average Sentiment Score (-1 = Negative, +1 = Positive, 0 = Neutral)",
+            yaxis_title="Topic",
+            height=600
+        )
+        st.plotly_chart(fig_topic, use_container_width=True)
+    else:
+        st.info("No topics found for the selected filters.")
+else:
+    st.info("Topic data not available.")
 
 # --- Latest Feedback Table ---
 st.subheader("📝 Latest Feedback")
-
-# Rename & select only required columns
 df_display = df_reviews.rename(columns={
     "author": "User",
     "text": "Feedback",
     "created_at": "Date",
     "source": "Source" 
 })[["User", "Feedback", "Date", "Source"]]
-
-# Sort latest 10
 latest_feedback = df_display.sort_values("Date", ascending=False).head(10).reset_index(drop=True)
-
-# Add Serial Number column (1–10)
 latest_feedback.index = latest_feedback.index + 1
 latest_feedback.index.name = "S.No."
-
 if not df_filtered.empty:
     st.dataframe(latest_feedback)
 else:
     st.info("No feedback available for selected filters.")
-
-
