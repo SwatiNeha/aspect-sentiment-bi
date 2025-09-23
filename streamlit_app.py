@@ -94,18 +94,17 @@ elif time_group == "Daily":
     last_period = df_filtered[df_filtered["date"] == latest_time] if latest_time is not None else pd.DataFrame()
 
 elif time_group == "Weekly":
-    # Floor to Monday of each week
-    df_filtered["week_start"] = df_filtered["datetime"].dt.to_period("W-MON").dt.start_time
+    # Create a Year-Week column (e.g., 2025-38)
+    df_filtered["year_week"] = df_filtered["datetime"].dt.strftime("%Y-%W")
 
-    # Aggregate by week_start
-    trend_data = df_filtered.groupby("week_start").agg(
+    trend_data = df_filtered.groupby("year_week").agg(
         Average_Sentiment=("score_signed", "mean"),
         Review_Count=("review_id", "count")
     ).reset_index()
 
     non_empty = trend_data[trend_data["Review_Count"] > 0]
-    latest_time = non_empty.iloc[-1]["week_start"] if not non_empty.empty else None
-    last_period = df_filtered[df_filtered["week_start"] == latest_time] if latest_time is not None else pd.DataFrame()
+    latest_time = non_empty.iloc[-1]["year_week"] if not non_empty.empty else None
+    last_period = df_filtered[df_filtered["year_week"] == latest_time] if latest_time is not None else pd.DataFrame()
 
 elif time_group == "Monthly":
     df_filtered["month_start"] = df_filtered["datetime"].dt.to_period("M").dt.start_time
